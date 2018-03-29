@@ -4,13 +4,12 @@ Created on Sat Feb 24 17:36:10 2018
 
 @author: JohnPaul
 
-@version: 1.0.0
+@version: 1.1.0
 
 """
 
 import sys
 import os
-import csv
 import time
 from PyQt5.QtWidgets import (QApplication, QWidget, QLineEdit, QFileDialog,
 QPushButton, QLabel, QHBoxLayout, QVBoxLayout, QMessageBox, QStackedLayout,
@@ -21,9 +20,11 @@ from PyQt5.QtCore import Qt, QRect, pyqtSignal
 #this is the pyserial package (can be installed using pip)
 import serial
 import serial.tools.list_ports
+import json
 
 class GraphicsView(QGraphicsView):
     itemClickedEvent = pyqtSignal(QGraphicsItem)
+    keyPressed = pyqtSignal(int, str, Qt.KeyboardModifiers)
     
     def __inti__(self, parent=None):
         super(GraphicsView, self).__init__(parent)
@@ -32,13 +33,20 @@ class GraphicsView(QGraphicsView):
         scenePosition = self.mapToScene(event.pos()).toPoint()
         itemClicked = self.itemAt(scenePosition)
         self.itemClickedEvent.emit(itemClicked)
+        
+    def keyPressEvent(self, event):
+        super(GraphicsView, self).keyPressEvent(event)
+        print(event)
+        print('key', event.key(), 'modifiers', event.modifiers(), 'nativeModifiers', event.nativeModifiers(), 'nativeScanCode', event.nativeScanCode(), 'nativeVirtualKey', event.nativeVirtualKey(), 'text', event.text())
 
+        self.keyPressed.emit(event.nativeScanCode(), event.text(), event.modifiers())
+        
 class App(QWidget):
     cleanupEvent = pyqtSignal()
     
     def __init__(self):
         super().__init__()
-        self.versionNumber = '1.0.0'
+        self.versionNumber = '1.1.0'
         self.title = 'Monkey See Monkey Do   v'+self.versionNumber
         self.left = 10
         self.top = 80
@@ -48,7 +56,7 @@ class App(QWidget):
         self.imageList = []
         self.numImages = 0
         self.currentImageNumber = 0
-        self.hotSpotFilename = 'hotspots.csv'
+        self.hotSpotFilename = 'hotspots.json'
         self.hotSpotFile = None
         self.hotSpotSize = 50
         self.currentHotSpot = None
@@ -129,6 +137,7 @@ class App(QWidget):
         self.scene = QGraphicsScene()
         self.graphicsView = GraphicsView(self.scene)
         self.graphicsView.itemClickedEvent.connect(self.hotSpotClickedHandler)
+        self.graphicsView.keyPressed.connect(self.keyPressedHandler)
         
         self.graphicsLayout = QVBoxLayout()
         self.graphicsLayout.addWidget(self.graphicsView)
@@ -193,14 +202,16 @@ class App(QWidget):
     def loadLevel(self, levelToLoad):
         try:
                 self.hotSpotFile = open(levelToLoad+os.path.sep+self.hotSpotFilename, 'r')
-                self.hotSpotCsv = csv.reader(self.hotSpotFile)
-                next(self.hotSpotCsv)
-                self.numHotSpotRecords = sum(1 for row in self.hotSpotCsv)
-                self.hotSpotFile.seek(0)
-                next(self.hotSpotCsv) #skip column labels on first line
+                self.hotSpotDict = json.load(self.hotSpotFile)
+                self.numHotSpotRecords = len(self.hotSpotDict)
+                #self.hotSpotCsv = csv.reader(self.hotSpotFile)
+                #next(self.hotSpotCsv)
+                #self.numHotSpotRecords = sum(1 for row in self.hotSpotCsv)
+                #self.hotSpotFile.seek(0)
+                #next(self.hotSpotCsv) #skip column labels on first line
         except IOError:
-            QMessageBox.critical(self, 'Error: No hotspots.csv', 'hotspots.csv does not exist\nA Hot Spot file is required to play the game. Please select a complete and valid content folder', QMessageBox.Ok)
-            self.selectedFolder.setText('Error: No hotspots.csv')
+            QMessageBox.critical(self, 'Error: No hotspots.json', 'hotspots.json does not exist\nA Hot Spot file is required to play the game. Please select a complete and valid content folder', QMessageBox.Ok)
+            self.selectedFolder.setText('Error: No hotspots.json')
             return -1
         self.imageList = []
         try:
@@ -210,7 +221,7 @@ class App(QWidget):
         except IOError:
             QMessageBox.critical(self, 'Error: images reading', 'Images could not be read\nPlease select a complete and valid content folder', QMessageBox.Ok)
             return -1
-        self.numImages = len(self.imageList)
+        self.numImages = len(self.imageList)-1
         if(self.numImages != self.numHotSpotRecords):
             QMessageBox.critical(self, 'Error: number of images in level "'+str(levelToLoad)+'" do not match the number of hot spot records', QMessageBox.Ok)
             return -1
@@ -226,18 +237,51 @@ class App(QWidget):
         
     def paintImageIndex(self, imageNumber):
         self.scene.clear()
-        hotSpotLine = next(self.hotSpotCsv)
+        print('current image number:', imageNumber)
+        self.nextHotSpotInput = self.hotSpotDict[str(self.currentImageNumber).zfill(6)]
+        print('nextHotSpotInput', self.nextHotSpotInput)
         self.currentPixmap = QPixmap.fromImage(self.imageList[imageNumber]).copy(QRect(0,0,1920,1020))
         
         self.scene.addPixmap(self.currentPixmap)
         
-        brush = QBrush(QColor(180, 180, 180, 100))
-        pen = QPen(QColor(255,0,0,128))
-        self.currentHotSpot = QGraphicsEllipseItem()
-        self.currentHotSpot.setRect(int(hotSpotLine[1])-self.hotSpotSize//2, int(hotSpotLine[2])-self.hotSpotSize//2, self.hotSpotSize, self.hotSpotSize)
-        self.currentHotSpot.setBrush(brush)
-        self.currentHotSpot.setPen(pen)
-        self.scene.addItem(self.currentHotSpot)
+        if(self.nextHotSpotInput['type'] == 'mouse'):
+            commandString = 'Click '
+            mouseButton = self.nextHotSpotInput['button']
+            if(mouseButton == 'right'):
+                pen = QPen(QColor(0,0,255,128))
+                commandString += 'right mouse button'
+            elif(mouseButton == 'left'):
+                pen = QPen(QColor(255,0,0,128))
+                commandString += 'left mouse button'
+            elif(mouseButton == 'middle'):
+                pen = QPen(QColor(0,255,0,128))
+                commandString += 'scroll wheel (middle mouse button)'
+            else:
+                pen = QPen(QColor(0,0,0,128))
+            xPosition = self.nextHotSpotInput['position'][0]
+            yPosition = self.nextHotSpotInput['position'][1]
+            brush = QBrush(QColor(180, 180, 180, 100))
+            self.currentHotSpot = QGraphicsEllipseItem()
+            self.currentHotSpot.setRect(xPosition-self.hotSpotSize//2, yPosition-self.hotSpotSize//2, self.hotSpotSize, self.hotSpotSize)
+            self.currentHotSpot.setBrush(brush)
+            self.currentHotSpot.setPen(pen)
+            self.scene.addItem(self.currentHotSpot)
+            self.currentInputKey = -1
+            self.currentInputModifiers = []
+        elif(self.nextHotSpotInput['type'] == 'key'):
+            print('key')
+            self.currentInputKey = self.nextHotSpotInput['scancode']
+            self.currentInputModifiers = self.simplifyModifierList(self.nextHotSpotInput['modifiers'])
+            commandString = 'Press '
+            for mod in self.currentInputModifiers:
+                commandString += mod
+                commandString += ' + '
+            commandString += self.nextHotSpotInput['name']
+            self.currentHotSpot = 'not a hotspot'
+        else:
+            QMessageBox.critical(self, 'Error: hotSpotInput type is incorrect. got: "'+self.nextHotSpotInput['type']+'"  expected: "key" or "mouse"', QMessageBox.Ok)
+        
+        self.setWindowTitle(self.title + '       ' + commandString)
         
     def hotSpotClickedHandler(self, itemClicked):
         if itemClicked is self.currentHotSpot:
@@ -249,6 +293,49 @@ class App(QWidget):
                 self.paintImageIndex(self.currentImageNumber)
         else:
             print('wrong spot clicked')
+    
+    def keyPressedHandler(self, nativeScanCode, keyText, modifiers):
+        if(nativeScanCode == self.currentInputKey) and self.checkModifierMatch(modifiers):
+            print('pressed correct key (or key combination)')
+            self.currentImageNumber += 1
+            if self.currentImageNumber >= self.numImages:
+                self.levelCompleted()
+            else:
+                self.paintImageIndex(self.currentImageNumber)
+        else:
+            print('wrong key or key combination pressed')
+            
+    def checkModifierMatch(self, pressedModifiers):
+        modifierTextList = []
+        if(pressedModifiers & Qt.ShiftModifier):
+            modifierTextList.append('shift')
+        if(pressedModifiers & Qt.AltModifier):
+            modifierTextList.append('alt')
+        if(pressedModifiers & Qt.ControlModifier):
+            modifierTextList.append('ctrl')
+        if(pressedModifiers & Qt.MetaModifier):
+            modifierTextList.append('win')
+        
+        return set(modifierTextList) == set(self.currentInputModifiers)
+    
+    def simplifyModifierList(self, modifierList):
+        tempSet = set()
+        for item in modifierList:
+            if item == 'left shift':
+                tempSet.add('shift')
+            elif item == 'right shift':
+                tempSet.add('shift')
+            elif item == 'left ctrl':
+                tempSet.add('ctrl')
+            elif item == 'right ctrl':
+                tempSet.add('ctrl')
+            elif item == 'left alt':
+                tempSet.add('alt')
+            elif item == 'right alt':
+                tempSet.add('alt')
+            else:
+                tempSet.add(item)
+        return list(tempSet)
     
     def levelCompleted(self):
         print('completed level: ', self.currentLevel+1)
@@ -269,6 +356,8 @@ class App(QWidget):
         self.currentHotSpot = None
         self.currentImageNumber = 0
         self.currentPixmap = None
+        self.currentPixmap = QPixmap.fromImage(self.imageList[self.numImages]).copy(QRect(0,0,1920,1020))
+        self.scene.addPixmap(self.currentPixmap)
         buttonReply = QMessageBox.information(self, 'You Win!', 'Congradulations, You Won!\nYou completed the game in ' + str(self.endTime-self.startTime) + 'seconds', QMessageBox.Ok | QMessageBox.Close)
         if buttonReply == QMessageBox.Ok:
             self.stackedLayout.setCurrentIndex(0)

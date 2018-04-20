@@ -4,7 +4,12 @@ Created on Sat Feb 24 17:36:10 2018
 
 @author: JohnPaul
 
-@version: 1.1.1
+@version: 1.2.0 - added config file. created option to upgrade robot after every hotspot or every level. Added refresh port button. Added different robot upgrade modes (selectable only in config file)
+
+Version History:
+    1.1.1 - fixed left and right alt key bugs
+    1.1.0 - Added keyboard input
+    1.0.0 - Initial release (only includes mouse clicks)
 
 """
 
@@ -21,6 +26,7 @@ from PyQt5.QtCore import Qt, QRect, pyqtSignal
 import serial
 import serial.tools.list_ports
 import json
+import configparser
 
 class GraphicsView(QGraphicsView):
     itemClickedEvent = pyqtSignal(QGraphicsItem, Qt.KeyboardModifiers, Qt.MouseButton)
@@ -38,8 +44,8 @@ class GraphicsView(QGraphicsView):
         
     def keyPressEvent(self, event):
         super(GraphicsView, self).keyPressEvent(event)
-        print(event)
-        print('key', event.key(), 'modifiers', event.modifiers(), 'nativeModifiers', event.nativeModifiers(), 'nativeScanCode', event.nativeScanCode(), 'nativeVirtualKey', event.nativeVirtualKey(), 'text', event.text())
+        #print(event)
+        #print('key', event.key(), 'modifiers', event.modifiers(), 'nativeModifiers', event.nativeModifiers(), 'nativeScanCode', event.nativeScanCode(), 'nativeVirtualKey', event.nativeVirtualKey(), 'text', event.text())
 
         self.keyPressed.emit(event.nativeScanCode(), event.text(), event.modifiers())
         
@@ -48,7 +54,7 @@ class App(QWidget):
     
     def __init__(self):
         super().__init__()
-        self.versionNumber = '1.1.1'
+        self.versionNumber = '1.2.0'
         self.title = 'Monkey See Monkey Do   v'+self.versionNumber
         self.left = 10
         self.top = 80
@@ -58,6 +64,7 @@ class App(QWidget):
         self.imageList = []
         self.numImages = 0
         self.currentImageNumber = 0
+        self.currentTotalImageNumber = 0
         self.hotSpotFilename = 'hotspots.json'
         self.hotSpotFile = None
         self.hotSpotSize = 50
@@ -68,9 +75,19 @@ class App(QWidget):
         self.initUI()
  
     def initUI(self):
+        
+        self.config = configparser.ConfigParser()
+        fileCheck = self.config.read('config.ini')
+        if(fileCheck == []):
+            QMessageBox.critical(self, 'Config Error!', 'config.ini was not found', QMessageBox.Ok)
+        self.upgradeTrigger = self.config['robot']['upgradeTrigger']
+        
         self.portLabel = QLabel('Port: ', self)
         self.portDisplay = QLineEdit(self)
         self.portDisplay.setEnabled(False)
+        self.portRefreshButton = QPushButton('Refresh Port', self)
+        self.portRefreshButton.setToolTip('Press to detect port of connected base station')
+        self.portRefreshButton.clicked.connect(self.refreshPort)
         
         comPort = self.findPort()
         if(comPort is not None):
@@ -110,6 +127,7 @@ class App(QWidget):
         self.hboxPort = QHBoxLayout()
         self.hboxPort.addWidget(self.portLabel)
         self.hboxPort.addWidget(self.portDisplay)
+        self.hboxPort.addWidget(self.portRefreshButton)
 
         self.hbox = QHBoxLayout()
         self.hbox.addWidget(self.folderLabel)
@@ -164,6 +182,20 @@ class App(QWidget):
     def bringToFront(self):
         self.setWindowState(self.windowState() & ~Qt.WindowMinimized | Qt.WindowActive)
         self.activateWindow()
+        
+    def refreshPort(self):
+        if(self.connected):
+            self.robot.close()
+        comPort = self.findPort()
+        if(comPort is not None):
+            self.robot = serial.Serial(comPort)
+            self.robot.baudrate = 115200
+            self.robot.timeout = 0.05
+            self.portDisplay.setText(comPort)
+            self.connected = True
+        else:
+            self.robot = None
+            self.connected = False
         
     def folderButtonClicked(self):
         self.folderName = QFileDialog.getExistingDirectory(self, "Select Folder Location for Recorded Content")
@@ -234,10 +266,17 @@ class App(QWidget):
         self.stackedLayout.setCurrentIndex(1)
         self.paintImageIndex(0)
         self.showMaximized()
-        self.setPower(125)
+        
+        if(self.upgradeTrigger == 'level'):
+            self.setPower((int(self.config['robot']['minPowerToMove'])*100)//255)
+        
         self.startTime = time.time()
         
     def paintImageIndex(self, imageNumber):
+        if(self.upgradeTrigger == 'hotspot'):
+            powerLevel = (self.currentTotalImageNumber/(self.numTotalImages-1))*100
+            print('power:', powerLevel, '  currentTotalImageNum:', self.currentTotalImageNumber, '  numTotalImages:', self.numTotalImages)
+            self.setPower(powerLevel)
         self.scene.clear()
         print('current image number:', imageNumber)
         self.nextHotSpotInput = self.hotSpotDict[str(self.currentImageNumber).zfill(6)]
@@ -277,7 +316,7 @@ class App(QWidget):
             self.scene.addItem(self.currentHotSpot)
             self.currentInputKey = -1
         elif(self.nextHotSpotInput['type'] == 'key'):
-            print('key')
+            #print('key')
             self.currentInputKey = self.nextHotSpotInput['scancode']
             commandString = 'Press '
             for mod in self.currentInputModifiers:
@@ -294,18 +333,22 @@ class App(QWidget):
         if itemClicked is self.currentHotSpot:
             if self.checkModifierMatch(modifiers):
                 if self.checkButtonMatch(mouseButton):
-                    print('clicked on hot spot!')
+                    #print('clicked on hot spot!')
                     self.currentImageNumber += 1
+                    self.currentTotalImageNumber += 1
                     if self.currentImageNumber >= self.numImages:
                         self.levelCompleted()
                     else:
                         self.paintImageIndex(self.currentImageNumber)
                 else:
-                    print('wrong mouse button clicked')
+                    #print('wrong mouse button clicked')
+                    a = 0
             else:
-                print("modifiers don't match")
+                #print("modifiers don't match")
+                a = 0
         else:
-            print('wrong spot clicked')
+            #print('wrong spot clicked')
+            a = 0
     
     def checkButtonMatch(self, pressedMouseButton):
         if pressedMouseButton == Qt.LeftButton:
@@ -320,14 +363,16 @@ class App(QWidget):
     
     def keyPressedHandler(self, nativeScanCode, keyText, modifiers):
         if(nativeScanCode == self.currentInputKey) and self.checkModifierMatch(modifiers):
-            print('pressed correct key (or key combination)')
+            #print('pressed correct key (or key combination)')
             self.currentImageNumber += 1
+            self.currentTotalImageNumber += 1
             if self.currentImageNumber >= self.numImages:
                 self.levelCompleted()
             else:
                 self.paintImageIndex(self.currentImageNumber)
         else:
-            print('wrong key or key combination pressed')
+            #print('wrong key or key combination pressed')
+            a = 0
             
     def checkModifierMatch(self, pressedModifiers):
         modifierTextList = []
@@ -363,8 +408,9 @@ class App(QWidget):
     
     def levelCompleted(self):
         print('completed level: ', self.currentLevel+1)
-        powerLevel = (((self.currentLevel+1)*127)//(self.numLevels+1))+127
-        self.setPower(powerLevel)
+        if(self.upgradeTrigger == 'level'):
+            powerLevel = (self.currentLevel/(self.numLevels-1))*100
+            self.setPower(powerLevel)
 
         self.currentLevel += 1
         if(self.currentLevel>=self.numLevels):
@@ -379,10 +425,11 @@ class App(QWidget):
         self.scene.clear()
         self.currentHotSpot = None
         self.currentImageNumber = 0
+        self.currentTotalImageNumber = 0
         self.currentPixmap = None
         self.currentPixmap = QPixmap.fromImage(self.imageList[self.numImages]).copy(QRect(0,0,1920,1020))
         self.scene.addPixmap(self.currentPixmap)
-        buttonReply = QMessageBox.information(self, 'You Win!', 'Congradulations, You Won!\nYou completed the game in ' + str(self.endTime-self.startTime) + 'seconds', QMessageBox.Ok | QMessageBox.Close)
+        buttonReply = QMessageBox.information(self, 'You Win!', 'Congradulations, You Won!\nYou completed the game in ' + "%.2f" % (self.endTime-self.startTime) + ' seconds', QMessageBox.Ok | QMessageBox.Close)
         if buttonReply == QMessageBox.Ok:
             self.stackedLayout.setCurrentIndex(0)
             self.showNormal()
@@ -400,18 +447,55 @@ class App(QWidget):
                 return port[0]
         return None
     
-    def setPower(self, desiredPowerLevel):
-        if(desiredPowerLevel>255):
-            raise ValueError('Power level cannot be set above 255')
-        if(desiredPowerLevel<0):
-            raise ValueError('Power level cannot be set below 0')
-        desiredPowerLevel = desiredPowerLevel-45
+    def setPower(self, powerLevel):
+        if(powerLevel>100):
+            raise ValueError('powerLevel cannot be set above 100')
+        if(powerLevel<0):
+            raise ValueError('powerLevel cannot be set below 0')
+        
+        minPower = int(self.config['robot']['minPowerToMove'])
+        mode = self.config['robot']['upgradeMode']
+        leftPower = minPower
+        rightPower = minPower
+        
+        if(mode == "left"):
+            if(powerLevel<=50):
+                leftPower = self.interpolate(powerLevel,0,100,minPower, 254)
+                rightPower = self.interpolate(powerLevel,0,50,200,140)
+            else:
+                leftPower = self.interpolate(powerLevel,0,100,minPower, 254)
+                rightPower = self.interpolate(powerLevel,50,100,140,254)
+        elif(mode == "right"):
+            if(powerLevel<=50):
+                rightPower = self.interpolate(powerLevel,0,100,minPower, 254)
+                leftPower = self.interpolate(powerLevel,0,50,200,140)
+            else:
+                rightPower = self.interpolate(powerLevel,0,100,minPower, 254)
+                leftPower = self.interpolate(powerLevel,50,100,140,254)
+        elif(mode == "both"):
+            leftPower = self.interpolate(powerLevel,0,100,minPower,254)
+            rightPower = leftPower
+        elif(mode == "other"):
+            leftPower = self.interpolate(powerLevel,0,100,minPower,254)
+            rightPower = leftPower
+        else:
+            raise ValueError('upgradeMode in config.ini does not match any accepted value')
+        
+        iLP = int(leftPower)
+        iRP = int(rightPower)
+
+        #desiredPowerLevel -= 45
         if(self.robot is not None):
-            print('connected to BaseStation, attempting to set power to ', desiredPowerLevel)
-            self.robot.write(bytes([0,0,desiredPowerLevel])+b'\n')
-            self.robot.write(bytes([0,0,desiredPowerLevel])+b'\n')
+            print('connected to BaseStation, attempting to set power to', powerLevel, '   L:', leftPower, 'R:', rightPower)
+            self.robot.write(bytes([0,0,iLP,iRP])+b'\n')
+            self.robot.write(bytes([0,0,iLP,iRP])+b'\n')
         else:
             print('BaseStation not connected, cannot change power level')
+    
+    def interpolate(self, inputValue, inputMin, inputMax, outputMin, outputMax):
+        ratio = (inputValue - inputMin)/(inputMax - inputMin)
+        outputValue = (outputMax - outputMin) * ratio + outputMin
+        return outputValue
     
     def closeEvent(self, event):
         print('emitting cleanup event')

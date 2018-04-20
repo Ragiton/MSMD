@@ -4,7 +4,7 @@ Created on Sat Feb 24 17:36:10 2018
 
 @author: JohnPaul
 
-@version: 1.1.0
+@version: 1.1.1
 
 """
 
@@ -23,7 +23,7 @@ import serial.tools.list_ports
 import json
 
 class GraphicsView(QGraphicsView):
-    itemClickedEvent = pyqtSignal(QGraphicsItem)
+    itemClickedEvent = pyqtSignal(QGraphicsItem, Qt.KeyboardModifiers, Qt.MouseButton)
     keyPressed = pyqtSignal(int, str, Qt.KeyboardModifiers)
     
     def __inti__(self, parent=None):
@@ -32,7 +32,9 @@ class GraphicsView(QGraphicsView):
     def mousePressEvent(self, event):
         scenePosition = self.mapToScene(event.pos()).toPoint()
         itemClicked = self.itemAt(scenePosition)
-        self.itemClickedEvent.emit(itemClicked)
+        keyModifiers = event.modifiers()
+        mouseButton = event.button()
+        self.itemClickedEvent.emit(itemClicked, keyModifiers, mouseButton)
         
     def keyPressEvent(self, event):
         super(GraphicsView, self).keyPressEvent(event)
@@ -46,7 +48,7 @@ class App(QWidget):
     
     def __init__(self):
         super().__init__()
-        self.versionNumber = '1.1.0'
+        self.versionNumber = '1.1.1'
         self.title = 'Monkey See Monkey Do   v'+self.versionNumber
         self.left = 10
         self.top = 80
@@ -244,16 +246,23 @@ class App(QWidget):
         
         self.scene.addPixmap(self.currentPixmap)
         
+        self.currentInputModifiers = self.simplifyModifierList(self.nextHotSpotInput['modifiers'])
+        
         if(self.nextHotSpotInput['type'] == 'mouse'):
-            commandString = 'Click '
-            mouseButton = self.nextHotSpotInput['button']
-            if(mouseButton == 'right'):
+            commandString = ''
+            if self.currentInputModifiers != []:
+                commandString += 'Press '
+            for mod in self.currentInputModifiers:
+                commandString += mod + ' + '
+            commandString += 'Click '
+            self.currentMouseButton = self.nextHotSpotInput['button']
+            if(self.currentMouseButton == 'right'):
                 pen = QPen(QColor(0,0,255,128))
                 commandString += 'right mouse button'
-            elif(mouseButton == 'left'):
+            elif(self.currentMouseButton == 'left'):
                 pen = QPen(QColor(255,0,0,128))
                 commandString += 'left mouse button'
-            elif(mouseButton == 'middle'):
+            elif(self.currentMouseButton == 'middle'):
                 pen = QPen(QColor(0,255,0,128))
                 commandString += 'scroll wheel (middle mouse button)'
             else:
@@ -267,11 +276,9 @@ class App(QWidget):
             self.currentHotSpot.setPen(pen)
             self.scene.addItem(self.currentHotSpot)
             self.currentInputKey = -1
-            self.currentInputModifiers = []
         elif(self.nextHotSpotInput['type'] == 'key'):
             print('key')
             self.currentInputKey = self.nextHotSpotInput['scancode']
-            self.currentInputModifiers = self.simplifyModifierList(self.nextHotSpotInput['modifiers'])
             commandString = 'Press '
             for mod in self.currentInputModifiers:
                 commandString += mod
@@ -283,16 +290,33 @@ class App(QWidget):
         
         self.setWindowTitle(self.title + '       ' + commandString)
         
-    def hotSpotClickedHandler(self, itemClicked):
+    def hotSpotClickedHandler(self, itemClicked, modifiers, mouseButton):
         if itemClicked is self.currentHotSpot:
-            print('clicked on hot spot!')
-            self.currentImageNumber += 1
-            if self.currentImageNumber >= self.numImages:
-                self.levelCompleted()
+            if self.checkModifierMatch(modifiers):
+                if self.checkButtonMatch(mouseButton):
+                    print('clicked on hot spot!')
+                    self.currentImageNumber += 1
+                    if self.currentImageNumber >= self.numImages:
+                        self.levelCompleted()
+                    else:
+                        self.paintImageIndex(self.currentImageNumber)
+                else:
+                    print('wrong mouse button clicked')
             else:
-                self.paintImageIndex(self.currentImageNumber)
+                print("modifiers don't match")
         else:
             print('wrong spot clicked')
+    
+    def checkButtonMatch(self, pressedMouseButton):
+        if pressedMouseButton == Qt.LeftButton:
+            pressedMouseButtonString = 'left'
+        if pressedMouseButton == Qt.RightButton:
+            pressedMouseButtonString = 'right'
+        if pressedMouseButton == Qt.MiddleButton:
+            pressedMouseButtonString = 'middle'
+        
+        return self.currentMouseButton == pressedMouseButtonString
+        
     
     def keyPressedHandler(self, nativeScanCode, keyText, modifiers):
         if(nativeScanCode == self.currentInputKey) and self.checkModifierMatch(modifiers):

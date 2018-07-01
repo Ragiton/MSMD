@@ -4,9 +4,10 @@ Created on Sat Feb 24 17:36:10 2018
 
 @author: JohnPaul
 
-@version: 1.2.1 - added game mode that changes the amount of time the robot can move instead of the robots speed
+@version: 1.2.2 - added reference file creation tool
 
 Version History:
+    1.2.1 - added game mode that changes the amount of time the robot can move instead of the robots speed
     1.2.0 - added config file. created option to upgrade robot after every hotspot or every level. Added refresh port button. Added different robot upgrade modes (selectable only in config file)
     1.1.1 - fixed left and right alt key bugs
     1.1.0 - Added keyboard input

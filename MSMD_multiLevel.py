@@ -4,9 +4,10 @@ Created on Sat Feb 24 17:36:10 2018
 
 @author: JohnPaul
 
-@version: 1.2.0 - added config file. created option to upgrade robot after every hotspot or every level. Added refresh port button. Added different robot upgrade modes (selectable only in config file)
+@version: 1.2.1 - added game mode that changes the amount of time the robot can move instead of the robots speed
 
 Version History:
+    1.2.0 - added config file. created option to upgrade robot after every hotspot or every level. Added refresh port button. Added different robot upgrade modes (selectable only in config file)
     1.1.1 - fixed left and right alt key bugs
     1.1.0 - Added keyboard input
     1.0.0 - Initial release (only includes mouse clicks)
@@ -27,6 +28,8 @@ import serial
 import serial.tools.list_ports
 import json
 import configparser
+from Settings import Settings
+import pyautogui
 
 class GraphicsView(QGraphicsView):
     itemClickedEvent = pyqtSignal(QGraphicsItem, Qt.KeyboardModifiers, Qt.MouseButton)
@@ -76,18 +79,22 @@ class App(QWidget):
  
     def initUI(self):
         
-        self.config = configparser.ConfigParser()
-        fileCheck = self.config.read('config.ini')
-        if(fileCheck == []):
-            QMessageBox.critical(self, 'Config Error!', 'config.ini was not found', QMessageBox.Ok)
-        self.upgradeTrigger = self.config['robot']['upgradeTrigger']
+        self.readConfig()
         
         self.portLabel = QLabel('Port: ', self)
         self.portDisplay = QLineEdit(self)
         self.portDisplay.setEnabled(False)
-        self.portRefreshButton = QPushButton('Refresh Port', self)
+        self.portRefreshButton = QPushButton(self)
         self.portRefreshButton.setToolTip('Press to detect port of connected base station')
         self.portRefreshButton.clicked.connect(self.refreshPort)
+        self.portRefreshButton.setIcon(QIcon('refresh.png'))
+        self.portRefreshButton.setFixedWidth(24)
+        
+        self.settingsButton = QPushButton()
+        self.settingsButton.setToolTip('Open the Settings Dialog')
+        self.settingsButton.setIcon(QIcon('settings.png'))
+        self.settingsButton.setMaximumWidth(24)
+        self.settingsButton.clicked.connect(self.openSettings)
         
         comPort = self.findPort()
         if(comPort is not None):
@@ -99,6 +106,11 @@ class App(QWidget):
         else:
             self.robot = None
             self.connected = False
+        
+        self.referenceCreator = QPushButton('Create Reference', self)
+        self.referenceCreator.setToolTip('Create a reference file from the selected image set')
+        self.referenceCreator.clicked.connect(self.createReferenceFile)
+        self.referenceCreator.setEnabled(False)
         
         self.folderButton = QPushButton('Select Folder', self)
         self.folderButton.setToolTip('Select the folder that contains the content you would like to play')
@@ -128,6 +140,7 @@ class App(QWidget):
         self.hboxPort.addWidget(self.portLabel)
         self.hboxPort.addWidget(self.portDisplay)
         self.hboxPort.addWidget(self.portRefreshButton)
+        self.hboxPort.addWidget(self.settingsButton)
 
         self.hbox = QHBoxLayout()
         self.hbox.addWidget(self.folderLabel)
@@ -147,6 +160,7 @@ class App(QWidget):
         self.vbox.addLayout(self.hbox)
         self.vbox.addLayout(self.hboxNumLevels)
         self.vbox.addLayout(self.hboxNumImages)
+        self.vbox.addWidget(self.referenceCreator)
         self.vbox.addWidget(self.startLabel)
         self.vbox.addWidget(self.startButton)
         self.vbox.addStretch(4)
@@ -178,7 +192,52 @@ class App(QWidget):
         self.cleanupEvent.connect(self.cleanupStuff)
         self.show()
         self.bringToFront()
+        
+        
+    def readConfig(self):
+        self.config = configparser.ConfigParser()
+        fileCheck = self.config.read('config.ini')
+        if(fileCheck == []):
+            QMessageBox.critical(self, 'Config Error!', 'config.ini was not found', QMessageBox.Ok)
+        self.robotSettings = self.config['robot']
+        self.upgradeTrigger = self.robotSettings['upgradeTrigger']
+        self.upgradeMode = self.robotSettings['upgradeMode']
+        self.minPowerToMove = self.robotSettings['minPowerToMove']
+        
+    def writeConfig(self):
+        self.robotSettings['upgradeTrigger'] = self.upgradeTrigger
+        self.robotSettings['upgradeMode'] = self.upgradeMode
+        self.robotSettings['minPowerToMove'] = self.minPowerToMove
+        with open('config.ini', 'w') as configFile:
+            self.config.write(configFile)
     
+    def openSettings(self):
+        try: 
+            SettingsIn = {'upgradeTrigger': 'hotspot',
+               'upgradeMode': 'left',
+               'minPowerToMove': '80'}
+            self.settingsWindow = Settings(self.robotSettings)
+            self.settingsWindow.Closing.connect(self.settingsClosed)
+            self.settingsWindow.show()
+            self.setDisabled(True)
+        except:
+            print ('ERROR - Setting.py Load Failed!')
+        
+    def settingsClosed(self, message):
+        if(message == 'Abort'):
+            print ('Settigns Aborted!')
+        elif(message == 'Closed'):
+            print ('Settings Closed!')
+            #Set New Settings
+            newSettings = self.settingsWindow.getSettings()
+            self.upgradeTrigger = newSettings['upgradeTrigger']
+            self.upgradeMode = newSettings['upgradeMode']
+            self.minPowerToMove = newSettings['minPowerToMove']
+            self.writeConfig()
+        else:
+            print ('ERROR - Unknown message returned from Settings.py Window!')
+        self.setDisabled(False)
+        
     def bringToFront(self):
         self.setWindowState(self.windowState() & ~Qt.WindowMinimized | Qt.WindowActive)
         self.activateWindow()
@@ -205,6 +264,7 @@ class App(QWidget):
             self.numTotalImages = 0
             self.listOfFilesInSelectedFolder = os.listdir(self.folderName)
             self.folderList = []
+            self.folderListNameOnly = []
             for name in self.listOfFilesInSelectedFolder:
                 fullFileName = os.path.join(self.folderName, name)
                 if os.path.isdir(fullFileName):
@@ -212,6 +272,7 @@ class App(QWidget):
                     if(result<0):
                         return
                     self.folderList.append(fullFileName)
+                    self.folderListNameOnly.append(name)
                     self.numLevels += 1
                     self.numTotalImages += result
 
@@ -229,20 +290,23 @@ class App(QWidget):
             self.currentLevel = 0
             self.numImagesDisplay.setText(str(self.numTotalImages))
             self.startButton.setEnabled(True)
+            self.referenceCreator.setEnabled(True)
             self.selectedFolder.setText(self.folderName)
         else:
             QMessageBox.warning(self, 'Folder Error!', 'The folder does not exist!\nPlease select a valid folder', QMessageBox.Ok)
         
     def loadLevel(self, levelToLoad):
         try:
-                self.hotSpotFile = open(levelToLoad+os.path.sep+self.hotSpotFilename, 'r')
-                self.hotSpotDict = json.load(self.hotSpotFile)
-                self.numHotSpotRecords = len(self.hotSpotDict)
-                #self.hotSpotCsv = csv.reader(self.hotSpotFile)
-                #next(self.hotSpotCsv)
-                #self.numHotSpotRecords = sum(1 for row in self.hotSpotCsv)
-                #self.hotSpotFile.seek(0)
-                #next(self.hotSpotCsv) #skip column labels on first line
+            print('Trying to load '+levelToLoad)
+            self.hotSpotFile = open(levelToLoad+os.path.sep+self.hotSpotFilename, 'r')
+            self.hotSpotDict = json.load(self.hotSpotFile)
+            self.numHotSpotRecords = len(self.hotSpotDict)
+            #self.hotSpotCsv = csv.reader(self.hotSpotFile)
+            #next(self.hotSpotCsv)
+            #self.numHotSpotRecords = sum(1 for row in self.hotSpotCsv)
+            #self.hotSpotFile.seek(0)
+            #next(self.hotSpotCsv) #skip column labels on first line
+            self.hotSpotFile.close()
         except IOError:
             QMessageBox.critical(self, 'Error: No hotspots.json', 'hotspots.json does not exist\nA Hot Spot file is required to play the game. Please select a complete and valid content folder', QMessageBox.Ok)
             self.selectedFolder.setText('Error: No hotspots.json')
@@ -268,7 +332,7 @@ class App(QWidget):
         self.showMaximized()
         
         if(self.upgradeTrigger == 'level'):
-            self.setPower((int(self.config['robot']['minPowerToMove'])*100)//255)
+            self.setPower((int(self.minPowerToMove)*100)//255)
         
         self.startTime = time.time()
         
@@ -453,8 +517,8 @@ class App(QWidget):
         if(powerLevel<0):
             raise ValueError('powerLevel cannot be set below 0')
         
-        minPower = int(self.config['robot']['minPowerToMove'])
-        mode = self.config['robot']['upgradeMode']
+        minPower = int(self.minPowerToMove)
+        mode = self.upgradeMode
         leftPower = minPower
         rightPower = minPower
         
@@ -475,9 +539,12 @@ class App(QWidget):
         elif(mode == "both"):
             leftPower = self.interpolate(powerLevel,0,100,minPower,254)
             rightPower = leftPower
-        elif(mode == "other"):
-            leftPower = self.interpolate(powerLevel,0,100,minPower,254)
-            rightPower = leftPower
+        elif(mode == "distance"):
+            #add fuel to the robot "tank"
+            a=None
+            
+            
+            
         else:
             raise ValueError('upgradeMode in config.ini does not match any accepted value')
         
@@ -499,12 +566,74 @@ class App(QWidget):
     
     def closeEvent(self, event):
         print('emitting cleanup event')
+        try:
+            self.settingsWindow.Abort()
+        except:
+            print('ERROR - Could not properly close settings window!')
         self.cleanupEvent.emit()
     
     def cleanupStuff(self):
         if self.robot is not None:
             self.robot.close()
         print('closing')
+        
+    def createReferenceFile(self):
+        referenceFolder = QFileDialog.getExistingDirectory(self, "Select Folder Location for Reference")
+        self.startTime = time.time()
+        if os.path.isdir(referenceFolder):
+            
+            if(self.numLevels>0):
+                #multiLevel game selected
+                print('multiLevelGame Reference started')
+                for i in range(0,self.numLevels):
+                    #create folder to hold level in reference file
+                    levelFolderName = referenceFolder+os.path.sep+self.folderListNameOnly[i]
+                    os.mkdir(levelFolderName)
+                    
+                    self.loadLevel(self.folderList[i])
+                    
+                    #start msmd level
+                    self.stackedLayout.setCurrentIndex(1)
+                    self.showMaximized()
+                    time.sleep(0.2)
+                    
+                    for j in range(0, self.numImages):
+                        print('next image: '+str(j))
+                        self.paintImageIndex(j)
+                        QApplication.processEvents()
+                        
+                        time.sleep(0.05)
+                        imageName = str(self.currentImageNumber).zfill(6)
+                        pyautogui.screenshot(levelFolderName+os.path.sep+imageName+'.png')
+                        
+                        self.currentImageNumber += 1
+                        self.currentTotalImageNumber += 1
+                    
+                    self.currentImageNumber = 0
+            else:
+                print('singleLevelGame Reference Started')
+                self.loadLevel(self.folderName)
+                self.stackedLayout.setCurrentIndex(1)
+                self.showMaximized()
+                
+                for j in range(0, self.numImages):
+                    print('next image: '+str(j))
+                    self.paintImageIndex(j)
+                    QApplication.processEvents()
+                    
+                    time.sleep(0.05)
+                    imageName = str(self.currentImageNumber).zfill(6)
+                    pyautogui.screenshot(levelFolderName+os.path.sep+imageName+'.png')
+                    
+                    self.currentImageNumber += 1
+                    self.currentTotalImageNumber += 1
+                    
+                self.currentImageNumber = 0
+            
+            self.gameCompleted()
+            
+                
+            
             
         
 if __name__ == '__main__':

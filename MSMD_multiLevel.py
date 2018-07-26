@@ -4,9 +4,10 @@ Created on Sat Feb 24 17:36:10 2018
 
 @author: JohnPaul
 
-@version: 1.2.2 - added reference file creation tool
+@version: 1.2.3 - added multiple base station capability
 
 Version History:
+    1.2.2 - added reference file creation tool
     1.2.1 - added game mode that changes the amount of time the robot can move instead of the robots speed
     1.2.0 - added config file. created option to upgrade robot after every hotspot or every level. Added refresh port button. Added different robot upgrade modes (selectable only in config file)
     1.1.1 - fixed left and right alt key bugs
@@ -58,7 +59,7 @@ class App(QWidget):
     
     def __init__(self):
         super().__init__()
-        self.versionNumber = '1.2.0'
+        self.versionNumber = '1.2.3'
         self.title = 'Monkey See Monkey Do   v'+self.versionNumber
         self.left = 10
         self.top = 80
@@ -82,12 +83,12 @@ class App(QWidget):
         
         self.readConfig()
         
-        self.portLabel = QLabel('Port: ', self)
+        self.portLabel = QLabel('Port(s): ', self)
         self.portDisplay = QLineEdit(self)
         self.portDisplay.setEnabled(False)
         self.portRefreshButton = QPushButton(self)
         self.portRefreshButton.setToolTip('Press to detect port of connected base station')
-        self.portRefreshButton.clicked.connect(self.refreshPort)
+        self.portRefreshButton.clicked.connect(self.refreshPorts)
         self.portRefreshButton.setIcon(QIcon('refresh.png'))
         self.portRefreshButton.setFixedWidth(24)
         
@@ -97,16 +98,8 @@ class App(QWidget):
         self.settingsButton.setMaximumWidth(24)
         self.settingsButton.clicked.connect(self.openSettings)
         
-        comPort = self.findPort()
-        if(comPort is not None):
-            self.robot = serial.Serial(comPort)
-            self.robot.baudrate = 115200
-            self.robot.timeout = 0.05
-            self.portDisplay.setText(comPort)
-            self.connected = True
-        else:
-            self.robot = None
-            self.connected = False
+        self.connected = False
+        self.refreshPorts()
         
         self.referenceCreator = QPushButton('Create Reference', self)
         self.referenceCreator.setToolTip('Create a reference file from the selected image set')
@@ -243,18 +236,23 @@ class App(QWidget):
         self.setWindowState(self.windowState() & ~Qt.WindowMinimized | Qt.WindowActive)
         self.activateWindow()
         
-    def refreshPort(self):
+    def refreshPorts(self):
         if(self.connected):
-            self.robot.close()
-        comPort = self.findPort()
-        if(comPort is not None):
-            self.robot = serial.Serial(comPort)
-            self.robot.baudrate = 115200
-            self.robot.timeout = 0.05
-            self.portDisplay.setText(comPort)
+            for baseStation in self.robot:
+                baseStation.close()
+        comPorts = self.findPorts()
+        if(comPorts):
+            self.robot = []
+            self.portDisplayText = ''
+            for i, port in enumerate(comPorts):
+                self.robot.append(serial.Serial(port))
+                self.robot[i].baudrate = 115200
+                self.robot[i].timeout = 0.05
+                self.portDisplayText += (port + '  ')
+            self.portDisplay.setText(self.portDisplayText)
             self.connected = True
         else:
-            self.robot = None
+            self.robot = []
             self.connected = False
         
     def folderButtonClicked(self):
@@ -504,13 +502,14 @@ class App(QWidget):
                 self.loadLevel(self.folderName)
             self.currentLevel = 0
     
-    def findPort(self):
+    def findPorts(self):
         ports = list(serial.tools.list_ports.comports())
+        comPortsList = []
         #microcontrollerPort = None
         for port in ports:
             if 'Silicon Labs' in str(port[1]):
-                return port[0]
-        return None
+                comPortsList.append(port[0])
+        return comPortsList
     
     def setPower(self, powerLevel):
         if(powerLevel>100):
@@ -553,10 +552,11 @@ class App(QWidget):
         iRP = int(rightPower)
 
         #desiredPowerLevel -= 45
-        if(self.robot is not None):
+        if self.robot:
             print('connected to BaseStation, attempting to set power to', powerLevel, '   L:', leftPower, 'R:', rightPower)
-            self.robot.write(bytes([0,0,iLP,iRP])+b'\n')
-            self.robot.write(bytes([0,0,iLP,iRP])+b'\n')
+            for baseStation in self.robot:
+                baseStation.write(bytes([0,0,iLP,iRP])+b'\n')
+                baseStation.write(bytes([0,0,iLP,iRP])+b'\n')
         else:
             print('BaseStation not connected, cannot change power level')
     
@@ -574,8 +574,9 @@ class App(QWidget):
         self.cleanupEvent.emit()
     
     def cleanupStuff(self):
-        if self.robot is not None:
-            self.robot.close()
+        if self.robot:
+            for baseStation in self.robot:
+                baseStation.close()
         print('closing')
         
     def createReferenceFile(self):

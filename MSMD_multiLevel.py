@@ -4,9 +4,10 @@ Created on Sat Feb 24 17:36:10 2018
 
 @author: JohnPaul
 
-@version: 1.2.3 - added multiple base station capability
+@version: 1.2.4 - updated to be compatible with all screen sizes
 
 Version History:
+    1.2.3 - added multiple base station capability
     1.2.2 - added reference file creation tool
     1.2.1 - added game mode that changes the amount of time the robot can move instead of the robots speed
     1.2.0 - added config file. created option to upgrade robot after every hotspot or every level. Added refresh port button. Added different robot upgrade modes (selectable only in config file)
@@ -76,7 +77,9 @@ class App(QWidget):
         self.currentHotSpot = None
         self.startTime = None
         self.endTime = None
-        self.screen = QDesktopWidget().screenGeometry()
+        self.screen = QDesktopWidget().availableGeometry()
+        print(self.screen)
+        print('width', self.screen.width(), 'height', self.screen.height())
         self.initUI()
  
     def initUI(self):
@@ -344,7 +347,7 @@ class App(QWidget):
         print('current image number:', imageNumber)
         self.nextHotSpotInput = self.hotSpotDict[str(self.currentImageNumber).zfill(6)]
         print('nextHotSpotInput', self.nextHotSpotInput)
-        self.currentPixmap = QPixmap.fromImage(self.imageList[imageNumber]).copy(QRect(0,0,1920,1020))
+        self.currentPixmap = QPixmap.fromImage(self.imageList[imageNumber]).copy(QRect(0,0,1920,1020)).scaled(self.screen.width(), self.screen.height(), aspectRatioMode=Qt.IgnoreAspectRatio)
         
         self.scene.addPixmap(self.currentPixmap)
         
@@ -369,11 +372,18 @@ class App(QWidget):
                 commandString += 'scroll wheel (middle mouse button)'
             else:
                 pen = QPen(QColor(0,0,0,128))
-            xPosition = self.nextHotSpotInput['position'][0]
-            yPosition = self.nextHotSpotInput['position'][1]
+            xScale = self.screen.width()/1920
+            yScale = self.screen.height()/1020
+            if(xScale>yScale):
+                minScale = yScale
+            else:
+                minScale = xScale
+            scaledHotSpotSize = self.hotSpotSize*minScale
+            xPosition = self.nextHotSpotInput['position'][0]*xScale
+            yPosition = self.nextHotSpotInput['position'][1]*yScale
             brush = QBrush(QColor(180, 180, 180, 100))
             self.currentHotSpot = QGraphicsEllipseItem()
-            self.currentHotSpot.setRect(xPosition-self.hotSpotSize//2, yPosition-self.hotSpotSize//2, self.hotSpotSize, self.hotSpotSize)
+            self.currentHotSpot.setRect(xPosition-scaledHotSpotSize/2, yPosition-scaledHotSpotSize/2, scaledHotSpotSize, scaledHotSpotSize)
             self.currentHotSpot.setBrush(brush)
             self.currentHotSpot.setPen(pen)
             self.scene.addItem(self.currentHotSpot)
@@ -490,7 +500,7 @@ class App(QWidget):
         self.currentImageNumber = 0
         self.currentTotalImageNumber = 0
         self.currentPixmap = None
-        self.currentPixmap = QPixmap.fromImage(self.imageList[self.numImages]).copy(QRect(0,0,1920,1020))
+        self.currentPixmap = QPixmap.fromImage(self.imageList[self.numImages]).copy(QRect(0,0,1920,1020)).scaled(self.screen.width(), self.screen.height(), aspectRatioMode=Qt.IgnoreAspectRatio)
         self.scene.addPixmap(self.currentPixmap)
         buttonReply = QMessageBox.information(self, 'You Win!', 'Congradulations, You Won!\nYou completed the game in ' + "%.2f" % (self.endTime-self.startTime) + ' seconds', QMessageBox.Ok | QMessageBox.Close)
         if buttonReply == QMessageBox.Ok:

@@ -60,7 +60,7 @@ class App(QWidget):
     
     def __init__(self):
         super().__init__()
-        self.versionNumber = '1.2.3'
+        self.versionNumber = '1.2.4'
         self.title = 'Monkey See Monkey Do   v'+self.versionNumber
         self.left = 10
         self.top = 80

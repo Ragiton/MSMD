@@ -68,6 +68,14 @@ class Settings(QWidget):
         self.MinPower.setSingleStep(5)
         self.MinPower.setFixedWidth(60)
         self.MinPower.setValue(int(SettingsIn['minPowerToMove']))
+
+        self.MaxPower = QSpinBox()
+        self.MaxPower.setToolTip('Set maximum power for robot to start moving')
+        self.MaxPower.setMaximum(255)
+        self.MaxPower.setMinimum(0)
+        self.MaxPower.setSingleStep(5)
+        self.MaxPower.setFixedWidth(60)
+        self.MaxPower.setValue(int(SettingsIn['maxPowerToMove']))
         
         SetButton = QPushButton()
         SetButton.setToolTip('Use the current settings')
@@ -100,7 +108,8 @@ class Settings(QWidget):
         
         glayout2.addWidget(QLabel('Min Power to Move'), 1, 1)
         glayout2.addWidget(self.MinPower, 1, 3)
-        glayout2.addItem(space, 3, 3)
+        glayout2.addWidget(QLabel('Max Power to Move'), 3, 1)
+        glayout2.addWidget(self.MaxPower, 3, 3)
         
         SpeedFrame.setLayout(glayout2)
         
@@ -121,7 +130,8 @@ class Settings(QWidget):
     def getSettings(self):
         out = {'upgradeTrigger': str(self.UpgradeTrigger.currentText()).lower(),
                'upgradeMode': str(self.UpgradeMode.currentText()).lower(),
-               'minPowerToMove': str(self.MinPower.value())}
+               'minPowerToMove': str(self.MinPower.value()),
+               'maxPowerToMove': str(self.MaxPower.value())}
         return(out)
         
 #==============================================================================

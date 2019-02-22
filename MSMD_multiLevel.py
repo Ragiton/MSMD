@@ -10,7 +10,8 @@ Created on Sat Feb 24 17:36:10 2018
 
 
 
-@version: 1.2.5 - updated to chuck and russ' version - includes playing sound files
+@version: 1.2.5 - updated to chuck and russ' version - includes playing sound files (with fix)
+
 
 
 
@@ -572,7 +573,7 @@ class App(QWidget):
 
                     self.numTotalImages += result
 
-
+            self.folderListNameOnly = sorted(self.folderListNameOnly)
 
             if(self.numLevels>0):
 
@@ -836,9 +837,9 @@ class App(QWidget):
 
             signal = pyqtSignal('PyQt_PyObject')
 
-            def __init__ (self, soundFilename):
+            def __init__ (self, parent, soundFilename):
 
-                super().__init__()
+                super().__init__(parent)
 
                 
 
@@ -924,7 +925,7 @@ class App(QWidget):
 
         try:
 
-            self.soundThread = SoundThread(soundFilename)
+            self.soundThread = SoundThread(self, soundFilename)
 
             self.soundThread.signal.connect(self.soundFinished)
 

@@ -4,10 +4,12 @@ Created on Sat Feb 24 17:36:10 2018
 
 @author: JohnPaul
 
-@version: 1.2.5 - updated to chuck and russ' version - includes playing sound files (with fix)
+@version: 1.2.6 - levels compound and are gated by a time limit. 
+                    Each level must be completed in the proper time to move on.
 
 
 Version History:
+    1.2.5 - updated to chuck and russ' version - includes playing sound files (with fix)
     1.2.4 - updated to be compatible with all screen sizes
     1.2.3 - added multiple base station capability
     1.2.2 - added reference file creation tool
@@ -68,7 +70,7 @@ class App(QWidget):
 
     def __init__(self):
         super().__init__()
-        self.versionNumber = '1.2.5'
+        self.versionNumber = '1.2.6'
         self.title = 'Monkey See Monkey Do   v'+self.versionNumber
         self.left = 10
         self.top = 80

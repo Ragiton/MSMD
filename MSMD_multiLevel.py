@@ -34,6 +34,7 @@ import serial
 import serial.tools.list_ports
 import json
 import configparser
+import yaml  # this is the PyYaml package (install using pip)
 from Settings import Settings
 import pyautogui
 import pyaudio
@@ -310,7 +311,11 @@ class App(QWidget):
                     return
                 self.numTotalImages = result
                 self.numLevelsDisplay.setText('1')
-
+            if(self.levelToUnlock>self.numLevels):
+                if(self.numLevels == 0):
+                    self.levelToUnlock = 0
+                else:
+                    self.levelToUnlock = self.numLevels-1
             self.currentLevel = 0
             self.numImagesDisplay.setText(str(self.numTotalImages))
             self.startButton.setEnabled(True)
@@ -567,42 +572,81 @@ class App(QWidget):
     def levelCompleted(self):
         self.levelTime = time.time()-self.startTime
         print('completed level: ', self.currentLevel+1)
+
         if(self.upgradeTrigger == 'level'):
             powerLevel = (self.currentLevel/(self.numLevels-1))*100
             self.setPower(powerLevel)
 
+        timeToBeat = (self.currentTotalImageNumber)*self.timeLimitMultiplier
         if(self.currentLevel == self.levelToUnlock):
             print('unlockLevel?')
             # if the level was completed fast enough to move on
-            if(self.levelTime <= self.numImages*self.timeLimitMultiplier):
+            if(self.levelTime <= timeToBeat):
                 print('levelUnlocked')
-                # move to next level
-                self.levelToUnlock += 1
                 # (next level is all levels compounded...)
-                if(self.currentLevel >= self.numLevels):
+                # if the level completed was the last level
+                if(self.currentLevel >= self.numLevels-1):
                     self.gameCompleted()
                 else:
-                    self.currentLevel = 0
-                    self.currentImageNumber = 0
-                    self.loadLevel(self.folderList[self.currentLevel])
-                    self.paintImageIndex(0)
+                    # move level to unlock up to next level
+                    self.levelToUnlock += 1
+                    # otherwise ask the user if they want to play the next
+                    # level or quit
+                    buttonReply = QMessageBox.question(
+                        self,
+                        'You Beat Level ' + str(self.currentLevel+1),
+                        'You Beat the level!\nYou completed the level in ' + "%.2f" % self.levelTime + ' seconds out of ' + "%.2f" % timeToBeat + '\nPlay next level?',
+                        QMessageBox.Yes | QMessageBox.Cancel)
+                    if(buttonReply == QMessageBox.Cancel):
+                        # quit game and go back to home screen
+                        self.returnToHomeScreen()
+                    else:
+                        # restart (but with next level unlocked)
+                        self.currentLevel = 0
+                        self.currentImageNumber = 0
+                        self.currentTotalImageNumber = 0
+                        self.loadLevel(self.folderList[self.currentLevel])
+                        self.paintImageIndex(0)
             else:
                 print('levelFailed')
                 # display dialog; complete in X time to advance to next level.  Replay?  Quit?
-                buttonReply = QMessageBox.information(self, 'Too Slow...', 'You were not fast enough.\nYou completed the level in ' + "%.2f" % (self.levelTime) + ' seconds\nFinish in ' + str(self.numImages*self.timeLimitMultiplier) + 'seconds to move on.', QMessageBox.Ok | QMessageBox.Quit)
-                self.currentLevel = 0
-                self.currentImageNumber = 0
-                self.loadLevel(self.folderList[self.currentLevel])
-                self.paintImageIndex(0)
+                buttonReply = QMessageBox.information(self, 'Too Slow...', 'You were not fast enough.\nYou completed the level in ' + "%.2f" % (self.levelTime) + ' seconds\nFinish in ' + "%.2f" % timeToBeat + ' seconds or less to move on.', QMessageBox.Ok | QMessageBox.Cancel)
+                if(buttonReply == QMessageBox.Cancel):
+                    # quit game and go back to home screen
+                    self.returnToHomeScreen()
+                else:
+                    # restart
+                    self.currentLevel = 0
+                    self.currentImageNumber = 0
+                    self.currentTotalImageNumber = 0
+                    self.loadLevel(self.folderList[self.currentLevel])
+                    self.paintImageIndex(0)
             self.startTime = time.time()
         else:
             # play next level
+            self.currentLevel += 1
             self.currentImageNumber = 0
             self.loadLevel(self.folderList[self.currentLevel])
             self.paintImageIndex(0)
 
+    def returnToHomeScreen(self):
+        print('returning to home screen')
+        self.setWindowTitle(self.title)
+        self.scene.clear()
+        self.currentHotSpot = None
+        self.currentImageNumber = 0
+        self.currentTotalImageNumber = 0
+        self.stackedLayout.setCurrentIndex(0)
+        self.showNormal()
+        if(self.numLevels > 0):
+            self.loadLevel(self.folderList[0])
+        else:
+            self.loadLevel(self.folderName)
+        self.currentLevel = 0
+
     def gameCompleted(self):
         self.endTime = time.time()
+        timeToBeat = (self.currentTotalImageNumber)*self.timeLimitMultiplier
         self.scene.clear()
         self.currentHotSpot = None
         self.currentImageNumber = 0
@@ -610,8 +654,9 @@ class App(QWidget):
         self.currentPixmap = None
         self.currentPixmap = QPixmap.fromImage(self.imageList[self.numImages]).copy(QRect(0, 0, 1920, 1020)).scaled(self.screen.width(), self.screen.height(), aspectRatioMode=Qt.IgnoreAspectRatio)
         self.scene.addPixmap(self.currentPixmap)
-        buttonReply = QMessageBox.information(self, 'You Win!', 'Congradulations, You Won!\nYou completed the game in ' + "%.2f" % (self.endTime-self.startTime) + ' seconds', QMessageBox.Ok | QMessageBox.Close)
+        buttonReply = QMessageBox.information(self, 'You Win!', 'Congradulations, You Won!\nYou completed the game in ' + "%.2f" % (self.endTime-self.startTime) + ' seconds out of ' "%.2f" % timeToBeat, QMessageBox.Ok)
         if buttonReply == QMessageBox.Ok:
+            self.setWindowTitle(self.title)
             self.stackedLayout.setCurrentIndex(0)
             self.showNormal()
             if(self.numLevels > 0):

@@ -1,2 +1,4 @@
 ExampleContent/
 *.pyc
+*.zip
+*.sublime-workspace

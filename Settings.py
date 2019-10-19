@@ -9,11 +9,13 @@ from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtGui import QIcon
 from PyQt5.QtWidgets import (QHBoxLayout, QVBoxLayout, QGridLayout, QComboBox, QLabel, QSpinBox, QGroupBox, QPushButton, QWidget, QFrame, QSpacerItem, QSizePolicy)
 
+
 class QHLine(QFrame):
     def __init__(self):
         super(QHLine, self).__init__()
         self.setFrameShape(QFrame.HLine)
         self.setFrameShadow(QFrame.Sunken)
+
 
 class Settings(QWidget):
 

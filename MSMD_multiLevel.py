@@ -40,10 +40,10 @@ except:
     pass
 import pyaudio
 import wave
-import glob
 
 
 textToScanCodeTable = {}  # ~~~ why is there a global variable. This should be in the app class
+
 
 def buildScanCodeTranslationTable(hotSpotDict):  # ~~~ why is this a global function. This should be in the app class
     for _, metadata in hotSpotDict.items():
@@ -275,7 +275,7 @@ class App(QWidget):
         self.robotSettings['minPowerToMove'] = self.minPowerToMove
         self.robotSettings['maxPowerToMove'] = self.maxPowerToMove
 
-        self.appSettings['level_to_unlock'] = self.levelToUnlock
+        self.appSettings['level_to_unlock'] = str(self.levelToUnlock)
         with open('config.ini', 'w') as configFile:
             self.config.write(configFile)
 
@@ -563,13 +563,13 @@ class App(QWidget):
                         self.paintImageIndex(self.currentImageNumber)
                 else:
                     # print('wrong mouse button clicked')
-                    pass  # a = 0
+                    pass
             else:
                 # print("modifiers don't match")
-                pass  # a = 0
+                pass
         else:
             # print('wrong spot clicked')
-            pass  # a = 0
+            pass
 
     def checkButtonMatch(self, pressedMouseButton):
         if pressedMouseButton == Qt.LeftButton:
@@ -604,12 +604,18 @@ class App(QWidget):
             modifierTextList.append('shift')
         if(pressedModifiers & Qt.AltModifier):
             modifierTextList.append('alt')
-        if(pressedModifiers & Qt.ControlModifier):
-            # modifierTextList.append('ctrl')
-            modifierTextList.append('cmd')  # on the mac this is the command key
-        if(pressedModifiers & Qt.MetaModifier):
-            modifierTextList.append('ctrl')  # on the mac this is the control key
-            # modifierTextList.append('win')
+
+        # handle key differences for mac
+        if(self.platform in ['Windows', 'Linux']):
+            if(pressedModifiers & Qt.ControlModifier):
+                modifierTextList.append('ctrl')
+            if(pressedModifiers & Qt.MetaModifier):
+                modifierTextList.append('win')
+        else:
+            if(pressedModifiers & Qt.ControlModifier):
+                modifierTextList.append('cmd')  # on the mac this is the command key
+            if(pressedModifiers & Qt.MetaModifier):
+                modifierTextList.append('ctrl')  # on the mac this is the control key
         return set(modifierTextList) == set(self.currentInputModifiers)
 
     def simplifyModifierList(self, modifierList):

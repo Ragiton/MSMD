@@ -4,7 +4,7 @@ Created on Sat Feb 24 17:36:10 2018
 
 @author: JohnPaul
 
-@version: 1.2.6 - levels compound and are gated by a time limit. 
+@version: 1.2.6 - levels compound and are gated by a time limit.
                     Each level must be completed in the proper time to move on.
 
 
@@ -23,12 +23,9 @@ Version History:
 
 import sys
 import os
+import platform
 import time
-from PyQt5.QtWidgets import (
-    QApplication, QWidget, QLineEdit, QFileDialog,
-    QPushButton, QLabel, QHBoxLayout, QVBoxLayout, QMessageBox, QStackedLayout,
-    QGraphicsScene, QGraphicsView, QDesktopWidget, QGraphicsEllipseItem,
-    QGraphicsItem)
+from PyQt5.QtWidgets import (QApplication, QWidget, QLineEdit, QFileDialog, QPushButton, QLabel, QHBoxLayout, QVBoxLayout, QMessageBox, QStackedLayout, QGraphicsScene, QGraphicsView, QDesktopWidget, QGraphicsEllipseItem, QGraphicsItem)
 from PyQt5.QtGui import QIcon, QImage, QPixmap, QColor, QBrush, QPen
 from PyQt5.QtCore import Qt, QRect, pyqtSignal, QThread
 # this is the pyserial package (can be installed using pip)
@@ -36,11 +33,26 @@ import serial
 import serial.tools.list_ports
 import json
 import configparser
-import yaml  # this is the PyYaml package (install using pip)
 from Settings import Settings
-import pyautogui
+try:
+    import pyautogui
+except:
+    pass
 import pyaudio
 import wave
+import glob
+
+
+textToScanCodeTable = {}  # ~~~ why is there a global variable. This should be in the app class
+
+def buildScanCodeTranslationTable(hotSpotDict):  # ~~~ why is this a global function. This should be in the app class
+    for _, metadata in hotSpotDict.items():
+        hType = metadata.get('type', '')
+        if hType == "key":
+            scancode = metadata.get("scancode", 0)
+            name = metadata.get("name", '')
+            textToScanCodeTable[name] = scancode
+            print('name: %s, scancode %s' % (name, scancode))
 
 
 class GraphicsView(QGraphicsView):
@@ -52,6 +64,7 @@ class GraphicsView(QGraphicsView):
 
     def mousePressEvent(self, event):
         scenePosition = self.mapToScene(event.pos()).toPoint()
+        #print ('moserPressEvent pos %s scenePosition %s' % (event.pos(), scenePosition))
         itemClicked = self.itemAt(scenePosition)
         keyModifiers = event.modifiers()
         mouseButton = event.button()
@@ -59,10 +72,43 @@ class GraphicsView(QGraphicsView):
 
     def keyPressEvent(self, event):
         super(GraphicsView, self).keyPressEvent(event)
-        # print(event)
-        # print('key', event.key(), 'modifiers', event.modifiers(), 'nativeModifiers', event.nativeModifiers(), 'nativeScanCode', event.nativeScanCode(), 'nativeVirtualKey', event.nativeVirtualKey(), 'text', event.text())
+        text = event.text()
+        code = event.key()
+        modifiers = event.modifiers()
+        try:
+            if code == 16777220:
+                textFromCode = 'enter'
+            elif code == 16777217:
+                textFromCode = 'tab'
+            elif code == 16777216:
+                textFromCode = 'esc'
+            else:
+                textFromCode = chr(code)
+        except:
+            textFromCode = text
 
-        self.keyPressed.emit(event.nativeScanCode(), event.text(), event.modifiers())
+        translatedScanCode = textToScanCodeTable.get(text.lower(),textToScanCodeTable.get(textFromCode,0))
+        print('keyPressEvent text "%s" textFromCode %s scanCode %s key %s modifiers %s' % (
+            text,
+            textFromCode,
+            translatedScanCode,
+            code,
+            self.convertModifier(modifiers)))
+
+        self.keyPressed.emit(translatedScanCode, textFromCode, modifiers)
+
+    def convertModifier(self, pressedModifiers):
+        modifierTextList = []
+        if(pressedModifiers & Qt.ShiftModifier):
+            modifierTextList.append('shift')
+        if(pressedModifiers & Qt.AltModifier):
+            modifierTextList.append('alt')
+        if(pressedModifiers & Qt.ControlModifier):
+            modifierTextList.append('cmd')  # on the mac this is the command key
+        if(pressedModifiers & Qt.MetaModifier):
+            modifierTextList.append('ctrl')  # on the mac this is the control key
+
+        return modifierTextList
 
 
 class App(QWidget):
@@ -70,7 +116,7 @@ class App(QWidget):
 
     def __init__(self):
         super().__init__()
-        self.versionNumber = '1.2.6'
+        self.versionNumber = '1.2.4'
         self.title = 'Monkey See Monkey Do   v'+self.versionNumber
         self.left = 10
         self.top = 80
@@ -87,12 +133,16 @@ class App(QWidget):
         self.currentHotSpot = None
         self.startTime = None
         self.endTime = None
+        self.robot = []
         self.screen = QDesktopWidget().availableGeometry()
+        self.platform = platform.system()
         print(self.screen)
-        print('width', self.screen.width(), 'height', self.screen.height())
+        print('Operating System: ', self.platform)
+        print('Screen: width:', self.screen.width(), 'height:', self.screen.height())
         self.initUI()
 
     def initUI(self):
+
         self.readConfig()
 
         self.portLabel = QLabel('Port(s): ', self)
@@ -339,21 +389,23 @@ class App(QWidget):
             # self.hotSpotFile.seek(0)
             # next(self.hotSpotCsv) #skip column labels on first line
             self.hotSpotFile.close()
+            buildScanCodeTranslationTable(self.hotSpotDict)
         except IOError:
             QMessageBox.critical(self, 'Error: No hotspots.json', 'hotspots.json does not exist\nA Hot Spot file is required to play the game. Please select a complete and valid content folder', QMessageBox.Ok)
             self.selectedFolder.setText('Error: No hotspots.json')
             return -1
         self.imageList = []
         try:
-            for imageFile in os.listdir(levelToLoad):
-                if(imageFile.endswith('.png')):
-                    self.imageList.append(QImage(levelToLoad+os.path.sep+imageFile))
+            for imageFile in sorted((imfile for imfile in os.listdir(levelToLoad) if imfile.endswith('.png'))):
+
+                self.imageList.append(QImage(levelToLoad+os.path.sep+imageFile))
+
         except IOError:
             QMessageBox.critical(self, 'Error: images reading', 'Images could not be read\nPlease select a complete and valid content folder', QMessageBox.Ok)
             return -1
-        self.numImages = len(self.imageList) - 1  # ??? why is this -1;  Starting image does not have a hotspot maybe? or ending image?
+        self.numImages = len(self.imageList)-1
         if(self.numImages != self.numHotSpotRecords):
-            QMessageBox.critical(self, 'Error: number of images in level "'+str(levelToLoad)+'" do not match the number of hot spot records', QMessageBox.Ok)
+            QMessageBox.critical(self, 'Error: Image Hotspot Mismatch', 'Error: number of images in level "'+str(levelToLoad)+'" do not match the number of hot spot records', QMessageBox.Ok)
             return -1
         return self.numImages
 
@@ -413,6 +465,7 @@ class App(QWidget):
             yPosition = self.nextHotSpotInput['position'][1]*yScale
             # adjust yPosition
             yPosition += 30
+            print('next hotspot pos x %s y %s' % (xPosition, yPosition))
             brush = QBrush(QColor(180, 180, 180, 100))
             self.currentHotSpot = QGraphicsEllipseItem()
             self.currentHotSpot.setRect(xPosition-scaledHotSpotSize/2, yPosition-scaledHotSpotSize/2, scaledHotSpotSize, scaledHotSpotSize)
@@ -439,8 +492,8 @@ class App(QWidget):
         class SoundThread(QThread):
             signal = pyqtSignal('PyQt_PyObject')
 
-            def __init__(self, parent, soundFilename):
-                super().__init__(parent)
+            def __init__(self, soundFilename):
+                super().__init__()
 
                 self.soundFilename = soundFilename
 
@@ -476,28 +529,32 @@ class App(QWidget):
 
         subFolder = ''
         if self.folderListNameOnly:
-            subFolder = '%s%s' % (self.folderListNameOnly[self.currentLevel], os.path.sep)
-        soundFilename = '%s%s%ssound%s.wav' % (self.folderName, os.path.sep, subFolder, self.currentImageNumber)
+            subFolder = '%s%s' % (self.folderListNameOnly[self.currentLevel], os. path.sep)
+        soundFilename = '%s%s%ssound%s.wav'% (self.folderName, os.path.sep, subFolder, self.currentImageNumber)
 
         if not os.path.isfile(soundFilename):
             return
-
         try:
-            self.soundThread = SoundThread(self, soundFilename)
+            self.soundThread = SoundThread(soundFilename)
             self.soundThread.signal.connect(self.soundFinished)
             self.soundThread.start()
         except:
             print('something when wrong with the sound thread')
+
     def soundFinished(self, soundFile):
-        # print(f'Finished playing {soundFile}')
-        pass
+        print('finished playing %s' % soundFile)
 
     def hotSpotClickedHandler(self, itemClicked, modifiers, mouseButton):
+
+        print('itemClicked %s, self.currentHotSpot %s, mouseButton %s' % (itemClicked, self.currentHotSpot, mouseButton))
+
         if itemClicked is self.currentHotSpot:
             if self.checkModifierMatch(modifiers):
                 if self.checkButtonMatch(mouseButton):
                     # print('clicked on hot spot!')
+
                     self.playSound()
+
                     self.currentImageNumber += 1
                     self.currentTotalImageNumber += 1
                     if self.currentImageNumber >= self.numImages:
@@ -506,13 +563,13 @@ class App(QWidget):
                         self.paintImageIndex(self.currentImageNumber)
                 else:
                     # print('wrong mouse button clicked')
-                    pass
+                    pass  # a = 0
             else:
                 # print("modifiers don't match")
-                pass
+                pass  # a = 0
         else:
             # print('wrong spot clicked')
-            pass
+            pass  # a = 0
 
     def checkButtonMatch(self, pressedMouseButton):
         if pressedMouseButton == Qt.LeftButton:
@@ -524,11 +581,13 @@ class App(QWidget):
 
         return self.currentMouseButton == pressedMouseButtonString
 
-
     def keyPressedHandler(self, nativeScanCode, keyText, modifiers):
-        if(nativeScanCode == self.currentInputKey) and self.checkModifierMatch(modifiers):
+        print('scanCode %s, currentInputKey %s' % (nativeScanCode, self.currentInputKey))
+        if (nativeScanCode == self.currentInputKey) and self.checkModifierMatch(modifiers):
             # print('pressed correct key (or key combination)')
+
             self.playSound()
+
             self.currentImageNumber += 1
             self.currentTotalImageNumber += 1
             if self.currentImageNumber >= self.numImages:
@@ -546,10 +605,11 @@ class App(QWidget):
         if(pressedModifiers & Qt.AltModifier):
             modifierTextList.append('alt')
         if(pressedModifiers & Qt.ControlModifier):
-            modifierTextList.append('ctrl')
+            # modifierTextList.append('ctrl')
+            modifierTextList.append('cmd')  # on the mac this is the command key
         if(pressedModifiers & Qt.MetaModifier):
-            modifierTextList.append('win')
-
+            modifierTextList.append('ctrl')  # on the mac this is the control key
+            # modifierTextList.append('win')
         return set(modifierTextList) == set(self.currentInputModifiers)
 
     def simplifyModifierList(self, modifierList):
@@ -756,47 +816,47 @@ class App(QWidget):
                     os.mkdir(levelFolderName)
 
                     self.loadLevel(self.folderList[i])
-                    
+
                     # start msmd level
                     self.stackedLayout.setCurrentIndex(1)
                     self.showMaximized()
                     time.sleep(0.2)
-                    
+
                     for j in range(0, self.numImages):
                         print('next image: '+str(j))
                         self.paintImageIndex(j)
                         QApplication.processEvents()
-                        
+
                         time.sleep(0.05)
                         imageName = str(self.currentImageNumber).zfill(6)
                         pyautogui.screenshot(levelFolderName+os.path.sep+imageName+'.png')
-                        
+
                         self.currentImageNumber += 1
                         self.currentTotalImageNumber += 1
-                    
+
                     self.currentImageNumber = 0
             else:
                 print('singleLevelGame Reference Started')
                 self.loadLevel(self.folderName)
                 self.stackedLayout.setCurrentIndex(1)
                 self.showMaximized()
-                
+
                 for j in range(0, self.numImages):
                     print('next image: '+str(j))
                     self.paintImageIndex(j)
                     QApplication.processEvents()
-                    
+
                     time.sleep(0.05)
                     imageName = str(self.currentImageNumber).zfill(6)
                     pyautogui.screenshot(levelFolderName+os.path.sep+imageName+'.png')
-                    
+
                     self.currentImageNumber += 1
                     self.currentTotalImageNumber += 1
-                    
+
                 self.currentImageNumber = 0
-            
+
             self.gameCompleted()
-            
+
 
 if __name__ == '__main__':
     app = 0

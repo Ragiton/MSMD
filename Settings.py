@@ -16,51 +16,51 @@ class QHLine(QFrame):
         self.setFrameShadow(QFrame.Sunken)
 
 class Settings(QWidget):
-    
+
     Closing = pyqtSignal(str)
-    
+
     def __init__(self, SettingsIn):
-        super(QWidget, self).__init__()
-        
+        super(Settings, self).__init__()
+
         self.__UserAbort = True
-        
+
         #-----Widget Settings-----
         self.setWindowIcon(QIcon('MSMD32.png'))
         self.setWindowTitle('MSMD Settings')
-        
-        #Remove Maximize and Minimize buttons 
+
+        #Remove Maximize and Minimize buttons
         self.setWindowFlags(self.windowFlags() & ~Qt.WindowMinMaxButtonsHint)
-        
+
         #-----Widget Lists-----
-        
+
         MasterUpgradeTriggers = ['Folder', 'Hotspot']
         MasterUpgradeMode = ['Both', 'Left', 'Right', 'Distance']
-        
+
         TriggerIdx = [x.lower() for x in MasterUpgradeTriggers].index(SettingsIn['upgradeTrigger'])
         ModeIdx = [x.lower() for x in MasterUpgradeMode].index(SettingsIn['upgradeMode'])
-        
+
         #-----Widgets-----
-        
+
         UpgradeFrame = QGroupBox()
         UpgradeFrame.setTitle('Upgrades')
-        
+
         SpeedFrame = QGroupBox()
         SpeedFrame.setTitle('Speed')
-        
+
         self.UpgradeTrigger = QComboBox()
         self.UpgradeTrigger.setToolTip('Set robot upgrade interval to hotspots or levels')
         self.UpgradeTrigger.setFixedWidth(80)
         for Trigger in MasterUpgradeTriggers:
             self.UpgradeTrigger.addItem(Trigger)
         self.UpgradeTrigger.setCurrentIndex(TriggerIdx)
-            
+
         self.UpgradeMode = QComboBox()
         self.UpgradeMode.setToolTip('Set robot upgrade mode')
         self.UpgradeMode.setFixedWidth(80)
         for Mode in MasterUpgradeMode:
             self.UpgradeMode.addItem(Mode)
         self.UpgradeMode.setCurrentIndex(ModeIdx)
-            
+
         self.MinPower = QSpinBox()
         self.MinPower.setToolTip('Set minimum power for robot to start moving')
         self.MinPower.setMaximum(255)

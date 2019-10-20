@@ -1,4 +1,7 @@
-ExampleContent/
 *.pyc
 *.zip
 *.sublime-workspace
+
+ExampleContent/
+venv/
+src/build/

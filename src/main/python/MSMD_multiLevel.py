@@ -4,11 +4,11 @@ Created on Sat Feb 24 17:36:10 2018
 
 @author: JohnPaul
 
-@version: 1.2.6 - levels compound and are gated by a time limit.
-                    Each level must be completed in the proper time to move on.
+@version: 1.2.7 - Mac and Windows versions combined. Fman Build System (fbs) implemented to handle building releases for different operating systems.
 
 
 Version History:
+    1.2.6 - levels compound and are gated by a time limit. Each level must be completed in the proper time to move on.
     1.2.5 - updated to chuck and russ' version - includes playing sound files (with fix)
     1.2.4 - updated to be compatible with all screen sizes
     1.2.3 - added multiple base station capability
@@ -23,8 +23,9 @@ Version History:
 
 import sys
 import os
-import platform
+import fbs_runtime.platform as platform
 import time
+from fbs_runtime.application_context.PyQt5 import ApplicationContext
 from PyQt5.QtWidgets import (QApplication, QWidget, QLineEdit, QFileDialog, QPushButton, QLabel, QHBoxLayout, QVBoxLayout, QMessageBox, QStackedLayout, QGraphicsScene, QGraphicsView, QDesktopWidget, QGraphicsEllipseItem, QGraphicsItem)
 from PyQt5.QtGui import QIcon, QImage, QPixmap, QColor, QBrush, QPen
 from PyQt5.QtCore import Qt, QRect, pyqtSignal, QThread
@@ -114,9 +115,9 @@ class GraphicsView(QGraphicsView):
 class App(QWidget):
     cleanupEvent = pyqtSignal()
 
-    def __init__(self):
+    def __init__(self, resources):
         super().__init__()
-        self.versionNumber = '1.2.4'
+        self.versionNumber = '1.2.7'
         self.title = 'Monkey See Monkey Do   v'+self.versionNumber
         self.left = 10
         self.top = 80
@@ -135,7 +136,8 @@ class App(QWidget):
         self.endTime = None
         self.robot = []
         self.screen = QDesktopWidget().availableGeometry()
-        self.platform = platform.system()
+        self.platform = platform.name()
+        self.resources = resources
         print(self.screen)
         print('Operating System: ', self.platform)
         print('Screen: width:', self.screen.width(), 'height:', self.screen.height())
@@ -151,12 +153,12 @@ class App(QWidget):
         self.portRefreshButton = QPushButton(self)
         self.portRefreshButton.setToolTip('Press to detect port of connected base station')
         self.portRefreshButton.clicked.connect(self.refreshPorts)
-        self.portRefreshButton.setIcon(QIcon('refresh.png'))
+        self.portRefreshButton.setIcon(QIcon(self.resources['imgRefresh']))
         self.portRefreshButton.setFixedWidth(24)
 
         self.settingsButton = QPushButton()
         self.settingsButton.setToolTip('Open the Settings Dialog')
-        self.settingsButton.setIcon(QIcon('settings.png'))
+        self.settingsButton.setIcon(QIcon(self.resources['imgSettings']))
         self.settingsButton.setMaximumWidth(24)
         self.settingsButton.clicked.connect(self.openSettings)
 
@@ -245,14 +247,14 @@ class App(QWidget):
         self.setLayout(self.stackedLayout)
         self.setWindowTitle(self.title)
         self.setGeometry(self.left, self.top, self.width, self.height)
-        self.setWindowIcon(QIcon('MSMD32.png'))
+        self.setWindowIcon(QIcon(self.resources['icoMSMD']))
         self.cleanupEvent.connect(self.cleanupStuff)
         self.show()
         self.bringToFront()
 
     def readConfig(self):
         self.config = configparser.ConfigParser()
-        fileCheck = self.config.read('config.ini')
+        fileCheck = self.config.read(self.resources['fileConfig'])
         if(fileCheck == []):
             QMessageBox.critical(self, 'Config Error!', 'config.ini was not found', QMessageBox.Ok)
         self.robotSettings = self.config['robot']
@@ -276,7 +278,7 @@ class App(QWidget):
         self.robotSettings['maxPowerToMove'] = self.maxPowerToMove
 
         self.appSettings['level_to_unlock'] = str(self.levelToUnlock)
-        with open('config.ini', 'w') as configFile:
+        with open(self.resources['fileConfig'], 'w') as configFile:
             self.config.write(configFile)
 
     def openSettings(self):
@@ -865,7 +867,14 @@ class App(QWidget):
 
 
 if __name__ == '__main__':
-    app = 0
-    app = QApplication(sys.argv)
-    ex = App()
-    sys.exit(app.exec_())
+    appctxt = ApplicationContext()  # required for fbs
+    #app = 0
+    #app = QApplication(sys.argv)
+    appResources = {}
+    appResources['fileConfig'] = appctxt.get_resource('config.ini')
+    appResources['icoMSMD'] = appctxt.get_resource('MSMD32.ico')
+    appResources['imgRefresh'] = appctxt.get_resource('refresh.png')
+    appResources['imgSettings'] = appctxt.get_resource('settings.png')
+    ex = App(appResources)
+    exit_code = appctxt.app.exec_()
+    sys.exit(exit_code)

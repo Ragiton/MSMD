@@ -1,0 +1,4 @@
+
+10/20/19 - PyAudio does not support python version 3.7 or later.  Had to download wheel file from this link to get it to work.
+https://www.lfd.uci.edu/~gohlke/pythonlibs/#pyaudio
+

@@ -1,5 +1,0 @@
-# To build standalone package run the follow command
-# make sure you have first run "source activate python37" to set up the virtaul environmet for python3.7.
-
-/anaconda2/envs/python37/bin/pyinstaller --noupx -i msmd32.ico --clean -w -F  MSMD_multiLevel.py
-

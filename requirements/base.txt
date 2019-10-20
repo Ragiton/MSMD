@@ -1,0 +1,18 @@
+altgraph==0.16.1
+fbs==0.8.4
+future==0.18.1
+pefile==2019.4.18
+Pillow==6.2.0
+# PyAudio==0.2.11  this must be installed using .whl file
+PyAutoGUI==0.9.48
+PyGetWindow==0.0.7
+PyInstaller==3.5
+PyMsgBox==1.0.7
+pyperclip==1.7.0
+PyQt5==5.9.2
+PyRect==0.1.4
+PyScreeze==0.1.24
+pyserial==3.4
+PyTweening==1.0.3
+pywin32-ctypes==0.2.0
+sip==4.19.8

@@ -5,3 +5,6 @@
 ExampleContent/
 venv/
 target/
+
+# Mac
+*.DS_Store

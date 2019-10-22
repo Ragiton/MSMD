@@ -5,7 +5,7 @@ An educational program intended to make learning more efficient. MSMD allows the
 ## Developers / Contributors
 MSMD is built on top of the [fman build system](https://github.com/mherrmann/fbs)
 
-PyAudio is also used but is not compatible with python 3.7.  A wheel file will need to be installed in order to successfully install PyAudio. (see notes.txt)
+Must use Python 3.6.  Later versions of python are not supported
 
 
 Licensed under GPLv3  

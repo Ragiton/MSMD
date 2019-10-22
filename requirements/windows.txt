@@ -1,4 +1,1 @@
 -r base.txt
-
-# pyaudio must be installed via wheel files as library does not yet include support for python 3.7
-# get wheel file here: https://www.lfd.uci.edu/~gohlke/pythonlibs/#pyaudio

@@ -1,6 +1,1 @@
 -r base.txt
-
-# must install pyaudio manually as it does not yet support python 3.7
-# first install homebrew
-# then, using homebrew, install portaudio by running this in the terminal: brew install portaudio
-# then try to install pyaudio again

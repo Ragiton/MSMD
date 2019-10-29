@@ -1,4 +1,7 @@
 
 10/20/19 - PyAudio does not support python version 3.7 or later.  Had to download wheel file from this link to get it to work.
 https://www.lfd.uci.edu/~gohlke/pythonlibs/#pyaudio
+This does not work on mac (link only has binaries for windows). Had to revert to python 3.6
 
+Problem is related to this PyInstaller Issue: https://github.com/pyinstaller/pyinstaller/issues/4130
+	Workaround described in issue also solved my problem.

@@ -1,3 +1,4 @@
 {
-    "mac_bundle_identifier": "com.ragiton.msmd"
+    "mac_bundle_identifier": "com.ragiton.msmd",
+    "hidden_imports": ["serial.tools.list_ports"]
 }

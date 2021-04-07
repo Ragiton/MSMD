@@ -87,7 +87,7 @@ class GraphicsView(QGraphicsView):
                 textFromCode = chr(code)
         except:
             textFromCode = text
-
+        textFromCode = textFromCode.lower()
         translatedScanCode = textToScanCodeTable.get(text.lower(),textToScanCodeTable.get(textFromCode,0))
         print('keyPressEvent text "%s" textFromCode %s scanCode %s key %s modifiers %s' % (
             text,

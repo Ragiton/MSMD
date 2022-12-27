@@ -2,5 +2,5 @@
     "app_name": "MSMD",
     "author": "JP Thomas",
     "main_module": "src/main/python/MSMD_multilevel.py",
-    "version": "1.2.7"
+    "version": "1.2.8"
 }

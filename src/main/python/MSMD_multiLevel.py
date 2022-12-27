@@ -3,11 +3,11 @@
 Created on Sat Feb 24 17:36:10 2018
 
 @author: JohnPaul
-
-@version: 1.2.7 - Mac and Windows versions combined. Fman Build System (fbs) implemented to handle building releases for different operating systems.
+@version: 1.2.8 - Fixed textFromCode case issue when using control modifier.
 
 
 Version History:
+    1.2.7 - Mac and Windows versions combined. Fman Build System (fbs) implemented to handle building releases for different operating systems.
     1.2.6 - levels compound and are gated by a time limit. Each level must be completed in the proper time to move on.
     1.2.5 - updated to chuck and russ' version - includes playing sound files (with fix)
     1.2.4 - updated to be compatible with all screen sizes
@@ -117,7 +117,7 @@ class App(QWidget):
 
     def __init__(self, resources):
         super().__init__()
-        self.versionNumber = '1.2.7'
+        self.versionNumber = '1.2.8'
         self.title = 'Monkey See Monkey Do   v'+self.versionNumber
         self.left = 10
         self.top = 80
